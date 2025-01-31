@@ -2,24 +2,25 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class OptimizedBruteForce {
     private static final char[] CHARACTERS = "abcdefghijklmnopqrstuvwxyz".toCharArray();
     private static AtomicBoolean passwordFound = new AtomicBoolean(false);
     private static long startTime;
     private static long endTime;
-
+    private static AtomicInteger currentIndex = new AtomicInteger(0);
+    
     public static void main(String[] args) {
         try {
             startTime = System.nanoTime();
-    
             java.util.Scanner scanner = new java.util.Scanner(System.in);
+            
             System.out.println("Enter '1' to provide a SHA-256 hash or '2' to provide a regular password:");
             String choice = scanner.nextLine();
-            final String targetHash;  // Make targetHash final
+            final String targetHash;
     
             if (choice.equals("1")) {
-                // User chooses to enter the hash directly
                 System.out.print("Enter the Hash (SHA-256, lowercase letters only): ");
                 targetHash = scanner.nextLine();
     
@@ -29,10 +30,9 @@ public class OptimizedBruteForce {
                 }
                 System.out.println("Target Hash: " + targetHash);
             } else if (choice.equals("2")) {
-                // User provides a regular password
                 System.out.print("Enter the regular password: ");
                 String regularPassword = scanner.nextLine();
-                targetHash = generateHash(regularPassword); // Hash the password to get the target hash
+                targetHash = generateHash(regularPassword);
     
                 System.out.println("Target Hash (SHA-256): " + targetHash);
             } else {
@@ -40,21 +40,15 @@ public class OptimizedBruteForce {
                 return;
             }
 
-            // Ask if the user wants to print passwords to the terminal
             System.out.println("Do you want to print each password being checked to the terminal? (yes/no)");
             String printChoice = scanner.nextLine();
             final boolean printPasswords = printChoice.equalsIgnoreCase("yes");
-
+            
             int availableThreads = Runtime.getRuntime().availableProcessors();
             ExecutorService executor = Executors.newFixedThreadPool(availableThreads);
-    
-            // Start brute-force for different password lengths (1 to 8)
-            for (int length = 1; length <= 8; length++) {
-                final int finalLength = length;  // Make sure it's final
-                final boolean finalPrintPasswords = printPasswords;  // Make sure it's final
-                executor.submit(() -> {
-                    bruteForce(targetHash, finalLength, finalPrintPasswords);
-                });
+            
+            for (int i = 0; i < availableThreads; i++) {
+                executor.submit(() -> bruteForce(targetHash, printPasswords));
             }
     
             executor.shutdown();
@@ -65,69 +59,48 @@ public class OptimizedBruteForce {
         }
     }
 
-    private static void bruteForce(String targetHash, int length, boolean printPasswords) {
-        int numThreads = Runtime.getRuntime().availableProcessors();
-        int startIdx = 0;
-        int endIdx = (int) Math.pow(26, length);
-        int chunkSize = (endIdx - startIdx) / numThreads;
-
-        for (int i = 0; i < numThreads; i++) {
-            int threadStart = startIdx + i * chunkSize;
-            int threadEnd = (i == numThreads - 1) ? endIdx : startIdx + (i + 1) * chunkSize;
-
-            final int finalStartIdx = threadStart;  // Make sure it's final
-            final int finalEndIdx = threadEnd;      // Make sure it's final
-            final int passLength = length;          // Make sure it's final
-            final String finalTargetHash = targetHash; // Make sure it's final
-            final boolean finalPrintPasswordsFlag = printPasswords; // Make sure it's final
-
-            new Thread(() -> generateAndCheck(finalStartIdx, finalEndIdx, passLength, finalTargetHash, finalPrintPasswordsFlag)).start();
-        }
-    }
-
-    private static void generateAndCheck(int startIdx, int endIdx, int length, String targetHash, boolean printPasswords) {
-        if (passwordFound.get()) return;
-
-        // Log which thread is processing which range
-        System.out.println(Thread.currentThread().getName() + " is checking passwords from index " + startIdx + " to " + (endIdx - 1));
-
-        for (int i = startIdx; i < endIdx; i++) {
-            String password = indexToPassword(i, length);
-            String hash = generateHash(password);
-
-            // If printPasswords flag is true, log each password being checked
-            if (printPasswords) {
-                System.out.println(Thread.currentThread().getName() + " checking password: " + password);
-            }
-
-            if (hash != null && hash.equals(targetHash)) {
-                System.out.println("Password found: " + password);
-                if (endTime == 0) {
-                    endTime = System.nanoTime();
+    private static void bruteForce(String targetHash, boolean printPasswords) {
+        for (int length = 1; length <= 5 && !passwordFound.get(); length++) {
+            int maxIndex = (int) Math.pow(26, length);
+            int index;
+            
+            while (!passwordFound.get() && (index = currentIndex.getAndIncrement()) < maxIndex) {
+                String password = indexToPassword(index, length);
+                String hash = generateHash(password);
+    
+                if (printPasswords) {
+                    System.out.println(Thread.currentThread().getName() + " checking password: " + password);
                 }
-                long elapsedTime = endTime - startTime;
-                double elapsedTimeInSeconds = elapsedTime / 1_000_000_000.0;
-                System.out.println("Time elapsed: " + elapsedTimeInSeconds + " seconds");
-
-                passwordFound.set(true);
-                endTime = System.nanoTime();
-                break;
+    
+                if (hash != null && hash.equals(targetHash)) {
+                    System.out.println("Password found: " + password);
+                    if (endTime == 0) {
+                        endTime = System.nanoTime();
+                    }
+                    long elapsedTime = endTime - startTime;
+                    double elapsedTimeInSeconds = elapsedTime / 1_000_000_000.0;
+                    System.out.println("Time elapsed: " + elapsedTimeInSeconds + " seconds");
+    
+                    passwordFound.set(true);
+                    endTime = System.nanoTime();
+                    break;
+                }
             }
         }
     }
-
+    
     private static String indexToPassword(int index, int length) {
         StringBuilder password = new StringBuilder();
-
+    
         for (int i = 0; i < length; i++) {
             int charIdx = index % 26;
             password.append(CHARACTERS[charIdx]);
             index /= 26;
         }
-
+    
         return password.toString();
     }
-
+    
     private static String generateHash(String passcode) {
         try {
             MessageDigest sha256 = MessageDigest.getInstance("SHA-256");

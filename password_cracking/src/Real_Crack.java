@@ -44,8 +44,8 @@ public class Real_Crack {
 
             int availableThreads = Runtime.getRuntime().availableProcessors();
             ExecutorService executor = Executors.newFixedThreadPool(availableThreads);
-    
-            for (int length = 8; length <= 13; length++) {
+                //min and max
+            for (int length = 8; length <= 10; length++) {
                 final int finalLength = length;
                 final boolean finalPrintPasswords = printPasswords;
                 executor.submit(() -> {
@@ -78,7 +78,7 @@ public class Real_Crack {
     private static void generateAndCheck(int startIdx, int endIdx, int length, String targetHash, boolean printPasswords) {
         if (passwordFound.get()) return;
 
-        System.out.println(Thread.currentThread().getName() + " is checking passwords from index " + startIdx + " to " + (endIdx - 1));
+       // System.out.println(Thread.currentThread().getName() + " is checking passwords from index " + startIdx + " to " + (endIdx - 1));
 
         for (int i = startIdx; i < endIdx; i++) {
             String password = indexToPassword(i, length);
